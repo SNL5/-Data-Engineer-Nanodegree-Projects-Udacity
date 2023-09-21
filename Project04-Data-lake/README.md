@@ -1,109 +1,66 @@
-# Project: Data Lake
+# Project: STEDI Human Balance Analytics
 
 ## Introduction
 
-*A music streaming startup, Sparkify, has grown their user base and song database even more and want to move their data warehouse to a data lake. Their data resides in S3, in a directory of JSON logs on user activity on the app, as well as a directory with JSON metadata on the songs in their app.*
+Spark and AWS Glue allow you to process data from multiple sources, categorize the data, and curate it to be queried in the future for multiple purposes. As a data engineer on the STEDI Step Trainer team, you'll need to extract the data produced by the STEDI Step Trainer sensors and the mobile app, and curate them into a data lakehouse solution on AWS so that Data Scientists can train the learning model. 
 
-In this project we will build an ETL pipeline that extracts their data from the data lake hosted on S3, processes them using Spark which will be deployed on an EMR cluster using AWS, and load the data back into S3 as a set of dimensional tables in parquet format. 
+## Project Details
 
-From this tables we will be able to find insights in what songs their users are listening to.
+The STEDI Team has been hard at work developing a hardware STEDI Step Trainer that:
 
-## How to run
+- trains the user to do a STEDI balance exercise;
+- and has sensors on the device that collect data to train a machine-learning algorithm to detect steps;
+- has a companion mobile app that collects customer data and interacts with the device sensors.
 
-*To run this project in local mode*, create a file `dl.cfg` in the root of this project with the following data:
+STEDI has heard from millions of early adopters who are willing to purchase the STEDI Step Trainers and use them.
 
-```
-KEY=YOUR_AWS_ACCESS_KEY
-SECRET=YOUR_AWS_SECRET_KEY
-```
+Several customers have already received their Step Trainers, installed the mobile application, and begun using them together to test their balance. The Step Trainer is just a motion sensor that records the distance of the object detected. The app uses a mobile phone accelerometer to detect motion in the X, Y, and Z directions.
 
-Create an S3 Bucket named `sparkify-dend` where output results will be stored.
+The STEDI team wants to use the motion sensor data to train a machine learning model to detect steps accurately in real-time. Privacy will be a primary consideration in deciding what data can be used.
 
-Finally, run the following command:
+Some of the early adopters have agreed to share their data for research purposes. Only these customers’ Step Trainer and accelerometer data should be used in the training data for the machine learning model.
 
-`python etl.py`
+## Implementation
 
+### Landing Zone
 
-## Project structure
+**Glue Tables**:
 
-The files found at this project are the following:
+- [customer_landing.sql](script/customer_landing.sql)
+- [accelerometer_landing.sql](script/accelerometer_landing.sql)
 
-- dl.cfg: File with AWS credentials.
-- etl.py: Program that extracts songs and log data from S3, transforms it using Spark, and loads the dimensional tables created in parquet format back to S3.
-- README.md: Current file, contains detailed information about the project.
+**Athena**:
+Landing Zone data query results
 
-## ETL pipeline
+*Customer Landing*:
 
-1. Load credentials
-2. Read data from S3
-    - Song data: `s3://udacity-dend/song_data`
-    - Log data: `s3://udacity-dend/log_data`
+<figure>
+  <img src="images/customer_landing.png" alt="Customer Landing data" width=60% height=60%>
+</figure>
 
-    The script reads song_data and load_data from S3.
+*Accelerometer Landing*:
 
-3. Process data using spark
+<figure>
+  <img src="images/accelerometer_landing.png" alt="Accelerometer Landing data" width=60% height=60%>
+</figure>
 
-    Transforms them to create five different tables listed under `Dimension Tables and Fact Table`.
-    Each table includes the right columns and data types. Duplicates are addressed where appropriate.
+### Trusted Zone
 
-4. Load it back to S3
+**Glue job scripts**:
 
-    Writes them to partitioned parquet files in table directories on S3.
+- [customer_landing_to_trusted.py](scripts/customer_landing_to_trusted.py)
+- [accelerometer_landing_to_trusted_zone.py](scripts/accelerometer_landing_to_trusted.py)
 
-    Each of the five tables are written to parquet files in a separate analytics directory on S3. Each table has its own folder within the directory. Songs table files are partitioned by year and then artist. Time table files are partitioned by year and month. Songplays table files are partitioned by year and month.
+**Athena**:
+Trusted Zone Query results:
 
-### Source Data
-- **Song datasets**: all json files are nested in subdirectories under *s3a://udacity-dend/song_data*. A sample of this files is:
+<figure>
+  <img src="images/customer_trusted.png" alt="Customer Truested data" width=60% height=60%>
+</figure>
 
-```
-{"num_songs": 1, "artist_id": "ARJIE2Y1187B994AB7", "artist_latitude": null, "artist_longitude": null, "artist_location": "", "artist_name": "Line Renaud", "song_id": "SOUPIRU12A6D4FA1E1", "title": "Der Kleine Dompfaff", "duration": 152.92036, "year": 0}
-```
+### Curated Zone
 
-- **Log datasets**: all json files are nested in subdirectories under *s3a://udacity-dend/log_data*. A sample of a single row of each files is:
+**Glue job scripts**:
 
-```
-{"artist":"Slipknot","auth":"Logged In","firstName":"Aiden","gender":"M","itemInSession":0,"lastName":"Ramirez","length":192.57424,"level":"paid","location":"New York-Newark-Jersey City, NY-NJ-PA","method":"PUT","page":"NextSong","registration":1540283578796.0,"sessionId":19,"song":"Opium Of The People (Album Version)","status":200,"ts":1541639510796,"userAgent":"\"Mozilla\/5.0 (Windows NT 6.1) AppleWebKit\/537.36 (KHTML, like Gecko) Chrome\/36.0.1985.143 Safari\/537.36\"","userId":"20"}
-```
-
-### Dimension Tables and Fact Table
-
-**songplays** - Fact table - records in log data associated with song plays i.e. records with page NextSong
-- songplay_id (INT) PRIMARY KEY: ID of each user song play 
-- start_time (DATE) NOT NULL: Timestamp of beggining of user activity
-- user_id (INT) NOT NULL: ID of user
-- level (TEXT): User level {free | paid}
-- song_id (TEXT) NOT NULL: ID of Song played
-- artist_id (TEXT) NOT NULL: ID of Artist of the song played
-- session_id (INT): ID of the user Session 
-- location (TEXT): User location 
-- user_agent (TEXT): Agent used by user to access Sparkify platform
-
-**users** - users in the app
-- user_id (INT) PRIMARY KEY: ID of user
-- first_name (TEXT) NOT NULL: Name of user
-- last_name (TEXT) NOT NULL: Last Name of user
-- gender (TEXT): Gender of user {M | F}
-- level (TEXT): User level {free | paid}
-
-**songs** - songs in music database
-- song_id (TEXT) PRIMARY KEY: ID of Song
-- title (TEXT) NOT NULL: Title of Song
-- artist_id (TEXT) NOT NULL: ID of song Artist
-- year (INT): Year of song release
-- duration (FLOAT) NOT NULL: Song duration in milliseconds
-
-**artists** - artists in music database
-- artist_id (TEXT) PRIMARY KEY: ID of Artist
-- name (TEXT) NOT NULL: Name of Artist
-- location (TEXT): Name of Artist city
-- lattitude (FLOAT): Lattitude location of artist
-- longitude (FLOAT): Longitude location of artist
-
-**time** - timestamps of records in songplays broken down into specific units
-- start_time (DATE) PRIMARY KEY: Timestamp of row
-- hour (INT): Hour associated to start_time
-- day (INT): Day associated to start_time
-- week (INT): Week of year associated to start_time
-- month (INT): Month associated to start_time 
-- year (INT): Year associated to start_time
-- weekday (TEXT): Name of week day associated to start_time
+- [customer_trusted_to_curated.py](scripts/customer_trusted_to_curated.py)
+- [trainer_trusted_to_curated.py](scripts/trainer_trusted_to_curated.py)
